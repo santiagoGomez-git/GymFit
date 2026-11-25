@@ -5,6 +5,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.transaction.annotation.Transactional;
+import java.time.LocalDate;
 import java.util.*;
 
 @Component
@@ -15,6 +16,7 @@ public class SeedData implements CommandLineRunner {
     private final AdminRepository admins;
     private final PasswordEncoder encoder;
     private final DietRepository diets;
+    private final LogRepository logs;
 
     @Value("${gymfit.admin.username}")
     String username;
@@ -22,12 +24,13 @@ public class SeedData implements CommandLineRunner {
     @Value("${gymfit.admin.password}")
     String password;
 
-    public SeedData(ExerciseRepository e, RoutineRepository r, AdminRepository a, PasswordEncoder p, DietRepository d) {
+    public SeedData(ExerciseRepository e, RoutineRepository r, AdminRepository a, PasswordEncoder p, DietRepository d, LogRepository l) {
         this.exercises = e;
         this.routines = r;
         this.admins = a;
         this.encoder = p;
         this.diets = d;
+        this.logs = l;
     }
 
     @Transactional
@@ -42,7 +45,6 @@ public class SeedData implements CommandLineRunner {
             admins.save(new AdminAccount(username, encoder.encode(password)));
         }
 
-        // Carga de Dietas (independiente de si ya hay ejercicios o no)
         if (diets.count() == 0) {
             diets.saveAll(List.of(
                     new Diet(
@@ -69,40 +71,77 @@ public class SeedData implements CommandLineRunner {
             ));
         }
 
-        if (exercises.count() > 0) return;
+        if (exercises.count() == 0) {
+            var data = exercises.saveAll(List.of(
+                    new Exercise("Sentadilla con barra", "Piernas", "Intermedio", "Barra y discos", "Apoyá la barra sobre la espalda alta. Descendé con el tronco estable y las rodillas alineadas con los pies. Usá una carga que permita mantener el control."),
+                    new Exercise("Press de banca", "Pecho", "Intermedio", "Banco y barra", "Con los pies apoyados, bajá la barra de forma controlada hacia el pecho y extendé los brazos sin perder la estabilidad."),
+                    new Exercise("Remo con mancuerna", "Espalda", "Principiante", "Mancuerna y banco", "Apoyá una mano en el banco. Llevá la mancuerna hacia la cadera manteniendo la espalda estable; evitá girar el tronco."),
+                    new Exercise("Press militar", "Hombros", "Intermedio", "Mancuernas", "Desde la altura de los hombros, empujá las mancuernas hacia arriba sin arquear la zona lumbar."),
+                    new Exercise("Curl de bíceps", "Brazos", "Principiante", "Mancuernas", "Flexioná los codos sin balancear el cuerpo. Descendé lentamente y mantené los codos cerca del tronco."),
+                    new Exercise("Plancha abdominal", "Core", "Principiante", "Colchoneta", "Apoyá antebrazos y puntas de los pies. Mantené el cuerpo alineado y la respiración fluida. Para ejercicios isométricos, las repeticiones indican segundos."),
+                    new Exercise("Peso muerto rumano", "Piernas", "Avanzado", "Barra y discos", "Llevá la cadera hacia atrás con una ligera flexión de rodillas. Mantené la barra cerca del cuerpo y la espalda estable."),
+                    new Exercise("Jalón al pecho", "Espalda", "Principiante", "Polea", "Llevá la barra hacia la parte superior del pecho, sin balancearte ni tirar detrás de la nuca.")
+            ));
 
-        var data = exercises.saveAll(List.of(
-                new Exercise("Sentadilla con barra", "Piernas", "Intermedio", "Barra y discos", "Apoyá la barra sobre la espalda alta. Descendé con el tronco estable y las rodillas alineadas con los pies. Usá una carga que permita mantener el control."),
-                new Exercise("Press de banca", "Pecho", "Intermedio", "Banco y barra", "Con los pies apoyados, bajá la barra de forma controlada hacia el pecho y extendé los brazos sin perder la estabilidad."),
-                new Exercise("Remo con mancuerna", "Espalda", "Principiante", "Mancuerna y banco", "Apoyá una mano en el banco. Llevá la mancuerna hacia la cadera manteniendo la espalda estable; evitá girar el tronco."),
-                new Exercise("Press militar", "Hombros", "Intermedio", "Mancuernas", "Desde la altura de los hombros, empujá las mancuernas hacia arriba sin arquear la zona lumbar."),
-                new Exercise("Curl de bíceps", "Brazos", "Principiante", "Mancuernas", "Flexioná los codos sin balancear el cuerpo. Descendé lentamente y mantené los codos cerca del tronco."),
-                new Exercise("Plancha abdominal", "Core", "Principiante", "Colchoneta", "Apoyá antebrazos y puntas de los pies. Mantené el cuerpo alineado y la respiración fluida. Para ejercicios isométricos, las repeticiones indican segundos."),
-                new Exercise("Peso muerto rumano", "Piernas", "Avanzado", "Barra y discos", "Llevá la cadera hacia atrás con una ligera flexión de rodillas. Mantené la barra cerca del cuerpo y la espalda estable."),
-                new Exercise("Jalón al pecho", "Espalda", "Principiante", "Polea", "Llevá la barra hacia la parte superior del pecho, sin balancearte ni tirar detrás de la nuca.")
-        ));
+            String[] names = {"Fuerza · cuerpo completo", "Tren superior", "Piernas y core"};
+            String[] days = {"Lunes", "Miércoles", "Viernes"};
+            int[][] ids = {{0, 1, 2, 5}, {1, 2, 3, 4}, {0, 6, 5}};
 
-        String[] names = {"Fuerza · cuerpo completo", "Tren superior", "Piernas y core"};
-        String[] days = {"Lunes", "Miércoles", "Viernes"};
-        int[][] ids = {{0, 1, 2, 5}, {1, 2, 3, 4}, {0, 6, 5}};
-
-        for (int i = 0; i < 3; i++) {
-            Routine r = new Routine();
-            r.name = names[i];
-            r.goal = "Fuerza general";
-            r.day = days[i];
-            r.difficulty = "Intermedio";
-            for (int j : ids[i]) {
-                RoutineItem t = new RoutineItem();
-                t.routine = r;
-                t.exercise = data.get(j);
-                t.position = r.items.size();
-                t.sets = 3;
-                t.reps = j == 5 ? 30 : 10;
-                t.restSeconds = 60;
-                r.items.add(t);
+            for (int i = 0; i < 3; i++) {
+                Routine r = new Routine();
+                r.name = names[i];
+                r.goal = "Fuerza general";
+                r.day = days[i];
+                r.difficulty = "Intermedio";
+                for (int j : ids[i]) {
+                    RoutineItem t = new RoutineItem();
+                    t.routine = r;
+                    t.exercise = data.get(j);
+                    t.position = r.items.size();
+                    t.sets = 3;
+                    t.reps = j == 5 ? 30 : 10;
+                    t.restSeconds = 60;
+                    r.items.add(t);
+                }
+                routines.save(r);
             }
-            routines.save(r);
+        }
+
+        // Precarga de marcas de progreso de fuerza si aún no existen
+        boolean hasProgressData = logs.findAll().stream().anyMatch(l -> l.weightKg != null);
+        if (!hasProgressData) {
+            var allEx = exercises.findAll();
+            if (allEx.size() >= 2) {
+                Exercise sentadilla = allEx.get(0);
+                Exercise pressBanca = allEx.get(1);
+
+                double[] pesosSentadilla = {60.0, 65.0, 70.0, 72.5, 77.5};
+                double[] pesosBanca = {45.0, 50.0, 52.5, 55.0, 60.0};
+
+                for (int i = 0; i < 5; i++) {
+                    WorkoutLog l1 = new WorkoutLog();
+                    l1.routineName = "Progreso · " + sentadilla.name;
+                    l1.exercise = sentadilla;
+                    l1.date = LocalDate.now().minusDays((4 - i) * 7L);
+                    l1.minutes = 20;
+                    l1.weightKg = pesosSentadilla[i];
+                    l1.setsCompleted = 4;
+                    l1.repsCompleted = 8;
+                    l1.notes = "Progresión semanal";
+                    logs.save(l1);
+
+                    WorkoutLog l2 = new WorkoutLog();
+                    l2.routineName = "Progreso · " + pressBanca.name;
+                    l2.exercise = pressBanca;
+                    l2.date = LocalDate.now().minusDays((4 - i) * 7L);
+                    l2.minutes = 20;
+                    l2.weightKg = pesosBanca[i];
+                    l2.setsCompleted = 4;
+                    l2.repsCompleted = 10;
+                    l2.notes = "Técnica controlada";
+                    logs.save(l2);
+                }
+            }
         }
     }
 }

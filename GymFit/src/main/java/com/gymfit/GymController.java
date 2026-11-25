@@ -285,6 +285,8 @@ public class GymController {
     @GetMapping("/history")
     String history(Model m) {
         m.addAttribute("page", "history");
+        m.addAttribute("exercises", exercises.findAll());
+        m.addAttribute("today", LocalDate.now());
         m.addAttribute("logs", logs.findAll().stream()
                 .sorted(Comparator.comparing((WorkoutLog l) -> l.date).thenComparing(l -> l.id).reversed())
                 .toList());

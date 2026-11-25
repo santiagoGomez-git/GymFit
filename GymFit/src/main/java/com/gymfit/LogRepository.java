@@ -1,3 +1,8 @@
 package com.gymfit;
+
 import org.springframework.data.jpa.repository.JpaRepository;
-public interface LogRepository extends JpaRepository<WorkoutLog,Long> {}
+import java.util.List;
+
+public interface LogRepository extends JpaRepository<WorkoutLog, Long> {
+    List<WorkoutLog> findByExerciseIdAndWeightKgIsNotNullOrderByDateAscIdAsc(Long exerciseId);
+}
