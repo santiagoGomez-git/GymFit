@@ -1,1 +1,194 @@
-<!DOCTYPE html><html lang="es" xmlns:th="http://www.thymeleaf.org"><head th:replace="~{layout :: head('Historial')}"></head><body><aside th:replace="~{layout :: sidebar}"></aside><main><header th:replace="~{layout :: topbar('Historial')}"></header><div th:replace="~{layout :: alerts}"></div><section class="panel"><div class="section-heading"><h2>Entrenamientos completados</h2><a class="button secondary" th:href="@{/routines}">Elegir una rutina</a></div><div class="table-scroll" th:if="${!logs.empty}"><table><thead><tr><th>Fecha</th><th>Rutina</th><th>Duración</th><th>Notas</th><th></th></tr></thead><tbody><tr th:each="l : ${logs}"><td th:text="${#temporals.format(l.date,'dd/MM/yyyy')}"></td><td th:text="${l.routineName}"></td><td th:text="${l.minutes} + ' min'"></td><td th:text="${l.notes}"></td><td><form th:action="@{/history/{id}/delete(id=${l.id})}" method="post" data-confirm="¿Eliminar este registro del historial?"><button class="text-button danger">Eliminar</button></form></td></tr></tbody></table></div><div class="empty" th:if="${logs.empty}"><span class="empty-symbol">◷</span><h2>Todavía no hay entrenamientos</h2><p>Desde el detalle de una rutina podés registrar tu primera sesión.</p></div></section></main></body></html>
+<!DOCTYPE html>
+<html lang="es" xmlns:th="http://www.thymeleaf.org">
+<head th:replace="~{layout :: head('Historial y Progreso')}"></head>
+<body>
+<aside th:replace="~{layout :: sidebar}"></aside>
+<main>
+    <header th:replace="~{layout :: topbar('Historial y Progreso')}"></header>
+    <div th:replace="~{layout :: alerts}"></div>
+
+    <!-- PANEL NUEVO: CURVA DE PROGRESIÓN DE FUERZA (API REST + CHART.JS) -->
+    <section class="panel" style="margin-bottom: 1.5rem;">
+        <div class="section-heading">
+            <h2>Evolución de cargas por ejercicio</h2>
+            <select id="exerciseSelect" style="max-width: 280px;">
+                <option th:each="ex : ${exercises}"
+                        th:value="${ex.id}"
+                        th:text="${ex.name + ' (' + ex.muscle + ')'}"></option>
+            </select>
+        </div>
+
+        <div style="position: relative; height: 260px; width: 100%; margin: 1rem 0;">
+            <canvas id="progressChart"></canvas>
+        </div>
+        <p id="emptyChartMsg" style="display:none; text-align:center; opacity:0.75; margin: 1rem 0;">
+            Aún no hay marcas de peso registradas para este ejercicio. ¡Cargá la primera abajo!
+        </p>
+
+        <!-- FORMULARIO RÁPIDO CONTRA @RestController (/api/progreso) -->
+        <form id="progressForm" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; align-items: end; margin-top: 1rem; padding-top: 1rem; border-top: 1px solid rgba(128,128,128,0.2);">
+            <input type="hidden" id="csrfToken" th:name="${_csrf.parameterName}" th:value="${_csrf.token}" />
+            <input type="hidden" id="csrfHeader" th:value="${_csrf.headerName}" />
+
+            <div>
+                <label for="progDate" style="display:block; font-size:0.85rem; margin-bottom:0.25rem;">Fecha</label>
+                <input type="date" id="progDate" th:value="${today}" th:max="${today}" required />
+            </div>
+            <div>
+                <label for="progWeight" style="display:block; font-size:0.85rem; margin-bottom:0.25rem;">Peso (kg)</label>
+                <input type="number" id="progWeight" step="0.5" min="1" max="500" placeholder="Ej: 75" required />
+            </div>
+            <div>
+                <label for="progSets" style="display:block; font-size:0.85rem; margin-bottom:0.25rem;">Series</label>
+                <input type="number" id="progSets" min="1" max="20" value="4" required />
+            </div>
+            <div>
+                <label for="progReps" style="display:block; font-size:0.85rem; margin-bottom:0.25rem;">Reps</label>
+                <input type="number" id="progReps" min="1" max="100" value="8" required />
+            </div>
+            <div>
+                <label for="progNotes" style="display:block; font-size:0.85rem; margin-bottom:0.25rem;">Observación</label>
+                <input type="text" id="progNotes" maxlength="200" placeholder="Opcional" />
+            </div>
+            <div>
+                <button type="submit" class="button" style="width:100%;">Registrar marca</button>
+            </div>
+        </form>
+    </section>
+
+    <!-- PANEL ORIGINAL AMPLIADO: TABLA DE HISTORIAL -->
+    <section class="panel">
+        <div class="section-heading">
+            <h2>Entrenamientos y marcas completadas</h2>
+            <a class="button secondary" th:href="@{/routines}">Elegir una rutina</a>
+        </div>
+        <div class="table-scroll" th:if="${!logs.empty}">
+            <table>
+                <thead>
+                <tr>
+                    <th>Fecha</th>
+                    <th>Actividad / Rutina</th>
+                    <th>Carga / Volumen</th>
+                    <th>Duración</th>
+                    <th>Notas</th>
+                    <th></th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="l : ${logs}">
+                    <td th:text="${#temporals.format(l.date,'dd/MM/yyyy')}"></td>
+                    <td th:text="${l.routineName}"></td>
+                    <td>
+                        <span th:if="${l.weightKg != null}"
+                              th:text="${l.weightKg + ' kg (' + l.setsCompleted + 'x' + l.repsCompleted + ')'}"
+                              style="font-weight: 600;"></span>
+                        <span th:if="${l.weightKg == null}" style="opacity: 0.6;">Sesión general</span>
+                    </td>
+                    <td th:text="${l.minutes} + ' min'"></td>
+                    <td th:text="${l.notes}"></td>
+                    <td>
+                        <form th:action="@{/history/{id}/delete(id=${l.id})}" method="post" data-confirm="¿Eliminar este registro del historial?">
+                            <button class="text-button danger">Eliminar</button>
+                        </form>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+        <div class="empty" th:if="${logs.empty}">
+            <span class="empty-symbol">◷</span>
+            <h2>Todavía no hay entrenamientos</h2>
+            <p>Desde el detalle de una rutina podés registrar tu primera sesión.</p>
+        </div>
+    </section>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    const select = document.getElementById('exerciseSelect');
+    const canvas = document.getElementById('progressChart');
+    const emptyMsg = document.getElementById('emptyChartMsg');
+    let chartInstance = null;
+
+    async function loadProgressChart(exerciseId) {
+        if (!exerciseId) return;
+        const res = await fetch(`/api/progreso/${exerciseId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+
+        if (chartInstance) {
+            chartInstance.destroy();
+        }
+
+        if (data.length === 0) {
+            canvas.style.display = 'none';
+            emptyMsg.style.display = 'block';
+            return;
+        }
+
+        canvas.style.display = 'block';
+        emptyMsg.style.display = 'none';
+
+        chartInstance = new Chart(canvas, {
+            type: 'line',
+            data: {
+                labels: data.map(p => p.date),
+                datasets: [{
+                    label: 'Peso levantado (kg)',
+                    data: data.map(p => p.weightKg),
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.15)',
+                    borderWidth: 3,
+                    pointRadius: 5,
+                    tension: 0.25,
+                    fill: true
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: { beginAtZero: false, title: { display: true, text: 'Kilogramos (kg)' } }
+                }
+            }
+        });
+    }
+
+    select.addEventListener('change', () => loadProgressChart(select.value));
+
+    document.getElementById('progressForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const params = new URLSearchParams({
+            exerciseId: select.value,
+            date: document.getElementById('progDate').value,
+            weightKg: document.getElementById('progWeight').value,
+            sets: document.getElementById('progSets').value,
+            reps: document.getElementById('progReps').value,
+            notes: document.getElementById('progNotes').value
+        });
+
+        const csrfHeader = document.getElementById('csrfHeader').value;
+        const csrfToken = document.getElementById('csrfToken').value;
+
+        const res = await fetch('/api/progreso', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                [csrfHeader]: csrfToken
+            },
+            body: params
+        });
+
+        if (res.ok) {
+            document.getElementById('progWeight').value = '';
+            document.getElementById('progNotes').value = '';
+            await loadProgressChart(select.value);
+        }
+    });
+
+    if (select.value) {
+        loadProgressChart(select.value);
+    }
+</script>
+</body>
+</html>
